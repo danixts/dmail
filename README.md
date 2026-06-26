@@ -1,26 +1,9 @@
 # dmail
 
-A small, dependency-free Go package to send email over any SMTP provider.
+Send email over **any SMTP provider** from Go. Zero dependencies.
 
-dmail speaks plain SMTP, so it works with Amazon SES, SendGrid, Mailgun,
-Postmark, Brevo, Gmail / Google Workspace, Microsoft 365, Azure Communication
-Services, or your own mail server — you only change the host, port and
-credentials.
-
-## Features
-
-- No external dependencies — standard library only
-- Works with any SMTP provider
-- STARTTLS (port 587/25) and implicit TLS (port 465)
-- Auto-negotiates `AUTH PLAIN` / `AUTH LOGIN` based on what the server offers
-- HTML + plain text (multipart/alternative)
-- CC, BCC, Reply-To
-- Attachments of any type (MIME type auto-detected)
-- Structured logging via `log/slog`
-- Pluggable transport for easy testing
-- Go 1.26+
-
-## Install
+Works with Amazon SES, SendGrid, Mailgun, Gmail, Microsoft 365, Azure — just
+change the host and credentials.
 
 ```bash
 go get github.com/danixts/dmail
@@ -28,7 +11,18 @@ go get github.com/danixts/dmail
 
 ## Quick start
 
-Set the environment variables:
+```go
+client, _ := dmail.NewFromEnv()
+
+client.Send(dmail.Email{
+	To:      []string{"someone@example.com"},
+	Subject: "Hello",
+	HTML:    "<h1>Hi 👋</h1>",
+	Text:    "Hi",
+})
+```
+
+`NewFromEnv` reads:
 
 ```
 SMTP_HOST=smtp.example.com
@@ -39,87 +33,41 @@ SMTP_FROM=no-reply@yourdomain.com
 SMTP_FROM_NAME=Your Brand
 ```
 
-```go
-package main
-
-import "github.com/danixts/dmail"
-
-func main() {
-	client, err := dmail.NewFromEnv()
-	if err != nil {
-		panic(err)
-	}
-
-	err = client.Send(dmail.Email{
-		To:      []string{"someone@example.com"},
-		Subject: "Hello",
-		HTML:    "<h1>Hello world</h1>",
-		Text:    "Hello world",
-	})
-	if err != nil {
-		panic(err)
-	}
-}
-```
-
-Or pass the configuration explicitly:
+Or configure it directly:
 
 ```go
-client, err := dmail.New(dmail.Config{
+client, _ := dmail.New(dmail.Config{
 	Host:     "smtp.example.com",
-	Port:     "587",
-	Username: "your-username",
-	Password: "your-password",
+	Username: "user",
+	Password: "pass",
 	From:     "no-reply@yourdomain.com",
 	FromName: "Your Brand",
 })
 ```
 
-`Port` defaults to `587` when omitted.
+## ✨ HTML templates with variables
 
-## Provider settings
-
-Any SMTP provider works. Set `Host`, `Port`, `Username` and `Password`
-accordingly:
-
-| Provider | Host | Port | Username | Password |
-|----------|------|------|----------|----------|
-| Amazon SES | `email-smtp.<region>.amazonaws.com` | 587 | SES SMTP username | SES SMTP password |
-| SendGrid | `smtp.sendgrid.net` | 587 | `apikey` | your API key |
-| Mailgun | `smtp.mailgun.org` | 587 | `postmaster@<domain>` | SMTP password |
-| Postmark | `smtp.postmarkapp.com` | 587 | server token | server token |
-| Brevo | `smtp-relay.brevo.com` | 587 | login | SMTP key |
-| Gmail / Workspace | `smtp.gmail.com` | 587 | your address | app password |
-| Microsoft 365 | `smtp.office365.com` | 587 | your address | password / app password |
-| Azure Communication Services | `smtp.azurecomm.net` | 587 | SMTP username | Entra client secret |
-
-> **Amazon SES note:** the SMTP username and password are the *SMTP credentials*
-> generated in the SES console — not your AWS access key/secret. Use the host for
-> your region, e.g. `email-smtp.us-east-1.amazonaws.com`.
-
-### TLS
-
-- Port **587** or **25** → dmail connects in plaintext and upgrades with
-  **STARTTLS**.
-- Port **465** → dmail connects with **implicit TLS** from the start.
-
-The mode is chosen automatically from the port.
-
-### Authentication
-
-dmail inspects the mechanisms the server advertises and uses `AUTH PLAIN` when
-available, falling back to `AUTH LOGIN` otherwise. This covers providers that
-only support one or the other (for example, some only offer `LOGIN`).
-
-## CC, BCC, Reply-To and attachments
-
-`AttachFile` reads a file and auto-detects its MIME type from the extension:
+Compile once, reuse for every email. Values are auto-escaped (no injection).
 
 ```go
-invoice, err := dmail.AttachFile("invoice.pdf")
-if err != nil {
-	// handle read error
-}
+invoice := dmail.MustTemplate(dmail.TemplateConfig{
+	Subject: "Invoice {{.Number}}",
+	HTML:    "<h2>Hi {{.Name}}</h2><p>Total: {{.Total}}</p>",
+})
+
+client.Send(dmail.Email{
+	To:       []string{"client@example.com"},
+	Template: invoice,
+	Data:     map[string]any{"Name": "Ariel", "Number": "F-001", "Total": "100 USD"},
+})
+```
+
+`Data` can be a map or a struct. Need a preview? `invoice.Render(data)`.
+
+## Attachments, CC, BCC, Reply-To
+
+```go
+file, _ := dmail.AttachFile("invoice.pdf") // MIME type auto-detected
 
 client.Send(dmail.Email{
 	To:          []string{"client@example.com"},
@@ -127,200 +75,56 @@ client.Send(dmail.Email{
 	Bcc:         []string{"audit@yourdomain.com"},
 	ReplyTo:     "support@yourdomain.com",
 	Subject:     "Your invoice",
-	HTML:        "<p>Your invoice is attached.</p>",
-	Attachments: []dmail.Attachment{invoice},
+	HTML:        "<p>Attached.</p>",
+	Attachments: []dmail.Attachment{file},
 })
-```
-
-Build attachments from in-memory bytes (ContentType is optional; detected from
-the Filename extension when omitted):
-
-```go
-Attachments: []dmail.Attachment{
-	{Filename: "report.csv", Content: csvBytes},
-	{Filename: "logo.png", Content: pngBytes, ContentType: "image/png"},
-}
-```
-
-## HTML templates with variables
-
-dmail can render the subject, HTML and text from Go templates, so you don't have
-to do string replacement by hand. Compile a template once and reuse it for every
-email — ideal for transactional mail (invoices, OTPs, receipts).
-
-The HTML is rendered with `html/template`, which **auto-escapes** values to
-prevent HTML/script injection.
-
-```go
-invoice := dmail.MustTemplate(dmail.TemplateConfig{
-	Subject: "Invoice {{.Number}} for {{.Name}}",
-	HTML: `<h2>Hello {{.Name}} 👋</h2>
-<p>Your invoice <b>{{.Number}}</b> is ready.</p>
-<p>Total: <b>{{.Total}}</b></p>`,
-	Text: "Hello {{.Name}}, invoice {{.Number}} total {{.Total}}.",
-})
-
-err := client.Send(dmail.Email{
-	To:       []string{"client@example.com"},
-	Template: invoice,
-	Data: map[string]any{
-		"Name":   "Ariel",
-		"Number": "F-2026-001",
-		"Total":  "100 USD",
-	},
-})
-```
-
-When `Email.Template` is set, dmail renders `Subject`, `HTML` and `Text` from it
-using `Email.Data`, so you don't set those fields yourself.
-
-### Data: map or struct
-
-`Data` can be a `map[string]any` or any struct — fields are referenced with
-`{{.FieldName}}`:
-
-```go
-type InvoiceData struct {
-	Name   string
-	Number string
-	Total  string
-}
-
-client.Send(dmail.Email{
-	To:       []string{"client@example.com"},
-	Template: invoice,
-	Data:     InvoiceData{Name: "Ariel", Number: "F-2026-001", Total: "100 USD"},
-})
-```
-
-### Validation and errors
-
-- `NewTemplate` returns an error if a template fails to parse — check it once at
-  startup.
-- `MustTemplate` panics on a parse error — handy for package-level templates
-  defined at init time.
-- A render error (for example, a missing field with strict settings) is returned
-  by `Send`.
-
-### Loading templates from files
-
-Keep templates in `.html` files and load them with `os.ReadFile`:
-
-```go
-htmlBytes, err := os.ReadFile("templates/invoice.html")
-if err != nil {
-	// handle error
-}
-invoice := dmail.MustTemplate(dmail.TemplateConfig{
-	Subject: "Invoice {{.Number}}",
-	HTML:    string(htmlBytes),
-})
-```
-
-### Rendering without sending
-
-You can render a template directly (for previews or tests):
-
-```go
-rendered, err := invoice.Render(map[string]any{"Name": "Ariel", "Number": "F-1", "Total": "100"})
-// rendered.Subject, rendered.HTML, rendered.Text
 ```
 
 ## Logging
 
-The client logs send attempts, successes and failures with `log/slog`. By
-default it uses `slog.Default()`. Inject your own logger:
+Structured logs via `log/slog` (errors are also returned):
 
 ```go
 logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 client, _ := dmail.NewFromEnv(dmail.WithLogger(logger))
 ```
 
-Example output:
+## Providers
 
-```
-level=INFO msg="dmail: sending email" to=[client@example.com] cc=[] subject="Your invoice" recipients=1
-level=INFO msg="dmail: email sent" to=[client@example.com] cc=[] subject="Your invoice"
-```
+| Provider | Host | Port |
+|----------|------|------|
+| Amazon SES | `email-smtp.<region>.amazonaws.com` | 587 |
+| SendGrid | `smtp.sendgrid.net` | 587 |
+| Mailgun | `smtp.mailgun.org` | 587 |
+| Postmark | `smtp.postmarkapp.com` | 587 |
+| Gmail / Workspace | `smtp.gmail.com` | 587 |
+| Microsoft 365 | `smtp.office365.com` | 587 |
+| Azure Communication Services | `smtp.azurecomm.net` | 587 |
 
-`Send` also returns the error, so you can both log and handle it.
+Port `587`/`25` uses STARTTLS, `465` uses implicit TLS — chosen automatically.
+Auth negotiates `PLAIN` / `LOGIN` based on what the server offers.
 
-## Custom transport (testing)
-
-The SMTP transport sits behind the `Transport` interface, so you can inject a
-fake in tests without touching the network:
-
-```go
-type fakeTransport struct{ delivered dmail.Envelope }
-
-func (f *fakeTransport) Deliver(e dmail.Envelope) error {
-	f.delivered = e
-	return nil
-}
-
-fake := &fakeTransport{}
-client, _ := dmail.New(cfg, dmail.WithTransport(fake))
-```
+> **Amazon SES:** use the *SMTP credentials* from the SES console (not your AWS
+> access key).
 
 ## API
 
-| Function / type | Description |
-|-----------------|-------------|
-| `New(Config, ...Option) (*Client, error)` | Create a client with explicit config |
-| `NewFromEnv(...Option) (*Client, error)` | Create a client from `SMTP_*` env vars |
-| `WithLogger(*slog.Logger) Option` | Inject a custom logger |
-| `WithTransport(Transport) Option` | Inject a custom transport |
-| `(*Client).Send(Email) error` | Send an email |
-| `AttachFile(path) (Attachment, error)` | Read a file and detect its MIME type |
-| `NewTemplate(TemplateConfig) (*Template, error)` | Compile a reusable subject/HTML/text template |
-| `MustTemplate(TemplateConfig) *Template` | Like `NewTemplate` but panics on parse error |
-| `(*Template).Render(data) (RenderedTemplate, error)` | Render without sending |
-| `Config` | Host, Port, Username, Password, From, FromName, TLSConfig (optional) |
-| `TemplateConfig` | Subject, HTML, Text (Go template sources) |
-| `Email` | To, Cc, Bcc, ReplyTo, Subject, Text, HTML, Attachments, Template, Data |
-| `Attachment` | Filename, Content (`[]byte`), ContentType (optional) |
-| `Transport` | `Deliver(Envelope) error` — the delivery port |
-
-### Environment variables
-
-| Variable | Maps to |
-|----------|---------|
-| `SMTP_HOST` | Config.Host |
-| `SMTP_PORT` | Config.Port |
-| `SMTP_USERNAME` | Config.Username |
-| `SMTP_PASSWORD` | Config.Password |
-| `SMTP_FROM` | Config.From |
-| `SMTP_FROM_NAME` | Config.FromName |
-
-## Architecture
-
-Files are split by responsibility (ports & adapters):
-
-| File | Responsibility |
-|------|----------------|
-| `dmail.go` | `Client` facade that wires everything together |
-| `config.go` | Config: data, defaults, validation, env loading |
-| `message.go` | Domain types: `Email`, `Attachment` |
-| `mime.go` | MIME message rendering |
-| `auth.go` | `AUTH LOGIN` mechanism |
-| `transport.go` | `Transport` port + SMTP adapter (STARTTLS / implicit TLS, auth negotiation) |
+| | |
+|--|--|
+| `New(Config, ...Option)` / `NewFromEnv(...Option)` | create a client |
+| `client.Send(Email)` | send an email |
+| `WithLogger(*slog.Logger)` / `WithTransport(Transport)` | options |
+| `AttachFile(path)` | read a file as an attachment |
+| `NewTemplate` / `MustTemplate` / `template.Render` | HTML templates |
 
 ## Development
 
-Tests live in the `tests/` folder as black-box tests (`package dmail_test`),
-including an in-memory fake SMTP server. Common tasks via the Makefile:
-
 ```bash
-make fmt        # format
-make vet        # go vet
-make lint       # golangci-lint
-make cover      # tests + coverage gate (fails under 80%)
-make check      # everything
+make check   # fmt + vet + lint + build + tests (80% coverage gate)
 ```
 
-CI (GitHub Actions) runs formatting, vet, lint, build and tests with a coverage
-gate on every push and pull request.
+Tests live in `tests/` (black-box, with an in-memory fake SMTP server).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT
