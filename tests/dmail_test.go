@@ -210,12 +210,17 @@ func TestTemplateRendering(t *testing.T) {
 		t.Fatalf("NewTemplate: %v", err)
 	}
 
+	type invoiceData struct {
+		Name   string
+		Number string
+	}
+
 	capture := &captureTransport{}
 	client := newClient(t, capture)
 	err = client.Send(dmail.Email{
 		To:       []string{"client@example.com"},
 		Template: tmpl,
-		Data:     map[string]any{"Name": "Ariel", "Number": "F-001"},
+		Data:     invoiceData{Name: "Ariel", Number: "F-001"},
 	})
 	if err != nil {
 		t.Fatalf("Send: %v", err)
