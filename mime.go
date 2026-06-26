@@ -35,20 +35,32 @@ func renderMessage(sender string, email Email) []byte {
 
 func messageHeaders(sender string, email Email) []string {
 	headers := []string{
-		"From: " + sender,
-		"To: " + strings.Join(email.To, ", "),
+		"From: " + sanitizeHeader(sender),
+		"To: " + joinAddresses(email.To),
 	}
 	if len(email.Cc) > 0 {
-		headers = append(headers, "Cc: "+strings.Join(email.Cc, ", "))
+		headers = append(headers, "Cc: "+joinAddresses(email.Cc))
 	}
 	if email.ReplyTo != "" {
-		headers = append(headers, "Reply-To: "+email.ReplyTo)
+		headers = append(headers, "Reply-To: "+sanitizeHeader(email.ReplyTo))
 	}
 	return append(headers,
-		"Subject: "+encodeHeader(email.Subject),
+		"Subject: "+encodeHeader(sanitizeHeader(email.Subject)),
 		"Date: "+time.Now().Format(time.RFC1123Z),
 		"MIME-Version: 1.0",
 	)
+}
+
+func joinAddresses(addresses []string) string {
+	cleaned := make([]string, len(addresses))
+	for i, address := range addresses {
+		cleaned[i] = sanitizeHeader(address)
+	}
+	return strings.Join(cleaned, ", ")
+}
+
+func sanitizeHeader(value string) string {
+	return strings.NewReplacer("\r", "", "\n", "").Replace(value)
 }
 
 func buildContent(email Email) mimeEntity {

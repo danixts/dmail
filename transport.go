@@ -3,6 +3,7 @@ package dmail
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
 )
@@ -63,17 +64,23 @@ func (t smtpTransport) Deliver(envelope Envelope) error {
 }
 
 func (t smtpTransport) dial() (*smtp.Client, error) {
-	if !t.config.usesImplicitTLS() {
-		client, err := smtp.Dial(t.config.address())
+	dialer := &net.Dialer{Timeout: t.config.Timeout}
+
+	if t.config.usesImplicitTLS() {
+		conn, err := tls.DialWithDialer(dialer, "tcp", t.config.address(), t.tlsConfig())
 		if err != nil {
-			return nil, fmt.Errorf("dmail: dial: %w", err)
+			return nil, fmt.Errorf("dmail: tls dial: %w", err)
+		}
+		client, err := smtp.NewClient(conn, t.config.Host)
+		if err != nil {
+			return nil, fmt.Errorf("dmail: smtp client: %w", err)
 		}
 		return client, nil
 	}
 
-	conn, err := tls.Dial("tcp", t.config.address(), t.tlsConfig())
+	conn, err := dialer.Dial("tcp", t.config.address())
 	if err != nil {
-		return nil, fmt.Errorf("dmail: tls dial: %w", err)
+		return nil, fmt.Errorf("dmail: dial: %w", err)
 	}
 	client, err := smtp.NewClient(conn, t.config.Host)
 	if err != nil {

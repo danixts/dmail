@@ -250,3 +250,22 @@ func TestTemplateParseError(t *testing.T) {
 		t.Error("expected parse error for malformed template")
 	}
 }
+
+func TestHeaderInjectionStripped(t *testing.T) {
+	capture := &captureTransport{}
+	client := newClient(t, capture)
+
+	err := client.Send(dmail.Email{
+		To:      []string{"a@example.com\r\nBcc: victim@example.com"},
+		Subject: "Hello\r\nX-Injected: yes",
+		Text:    "body",
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	message := string(capture.envelope.Message)
+	if strings.Contains(message, "\nX-Injected:") || strings.Contains(message, "\nBcc: victim") {
+		t.Errorf("header injection not sanitized:\n%s", message)
+	}
+}

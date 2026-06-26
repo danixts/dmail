@@ -131,7 +131,7 @@ make check   # fmt + vet + lint + build + tests (80% coverage gate)
 ```
 
 Tests live in `tests/` (black-box, with an in-memory fake SMTP server).
-Requires Go 1.24+.
+Requires Go 1.26+.
 
 ## License
 

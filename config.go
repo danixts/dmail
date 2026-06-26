@@ -4,9 +4,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"os"
+	"time"
 )
 
-const defaultPort = "587"
+const (
+	defaultPort    = "587"
+	defaultTimeout = 30 * time.Second
+)
 
 type Config struct {
 	Host      string
@@ -15,6 +19,7 @@ type Config struct {
 	Password  string
 	From      string
 	FromName  string
+	Timeout   time.Duration
 	TLSConfig *tls.Config
 }
 
@@ -32,6 +37,9 @@ func ConfigFromEnv() Config {
 func (c Config) withDefaults() Config {
 	if c.Port == "" {
 		c.Port = defaultPort
+	}
+	if c.Timeout == 0 {
+		c.Timeout = defaultTimeout
 	}
 	return c
 }
