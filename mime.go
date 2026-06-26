@@ -1,0 +1,126 @@
+package dmail
+
+import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
+	"mime"
+	"mime/multipart"
+	"net/textproto"
+	"strings"
+	"time"
+)
+
+type mimeEntity struct {
+	contentType string
+	body        []byte
+}
+
+func renderMessage(sender string, email Email) []byte {
+	headers := messageHeaders(sender, email)
+	content := buildContent(email)
+
+	var message bytes.Buffer
+	for _, header := range headers {
+		message.WriteString(header + "\r\n")
+	}
+	message.WriteString("Content-Type: " + content.contentType + "\r\n\r\n")
+	message.Write(content.body)
+	return message.Bytes()
+}
+
+func messageHeaders(sender string, email Email) []string {
+	headers := []string{
+		"From: " + sender,
+		"To: " + strings.Join(email.To, ", "),
+	}
+	if len(email.Cc) > 0 {
+		headers = append(headers, "Cc: "+strings.Join(email.Cc, ", "))
+	}
+	if email.ReplyTo != "" {
+		headers = append(headers, "Reply-To: "+email.ReplyTo)
+	}
+	return append(headers,
+		"Subject: "+encodeHeader(email.Subject),
+		"Date: "+time.Now().Format(time.RFC1123Z),
+		"MIME-Version: 1.0",
+	)
+}
+
+func buildContent(email Email) mimeEntity {
+	content := buildBody(email)
+	if len(email.Attachments) == 0 {
+		return content
+	}
+	parts := []mimeEntity{content}
+	for _, attachment := range email.Attachments {
+		parts = append(parts, buildAttachment(attachment))
+	}
+	return combineParts("mixed", parts)
+}
+
+func buildBody(email Email) mimeEntity {
+	var parts []mimeEntity
+	if strings.TrimSpace(email.Text) != "" {
+		parts = append(parts, buildText("text/plain", email.Text))
+	}
+	if strings.TrimSpace(email.HTML) != "" {
+		parts = append(parts, buildText("text/html", email.HTML))
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return combineParts("alternative", parts)
+}
+
+func buildText(mediaType, body string) mimeEntity {
+	return mimeEntity{
+		contentType: mediaType + `; charset="UTF-8"`,
+		body:        []byte(body),
+	}
+}
+
+func buildAttachment(attachment Attachment) mimeEntity {
+	return mimeEntity{
+		contentType: fmt.Sprintf("%s; name=%q", attachment.resolvedContentType(), attachment.Filename),
+		body:        encodeBase64(attachment.Content),
+	}
+}
+
+func combineParts(subtype string, parts []mimeEntity) mimeEntity {
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+	for _, part := range parts {
+		header := textproto.MIMEHeader{"Content-Type": {part.contentType}}
+		if partWriter, err := writer.CreatePart(header); err == nil {
+			partWriter.Write(part.body)
+		}
+	}
+	writer.Close()
+	return mimeEntity{
+		contentType: fmt.Sprintf("multipart/%s; boundary=%q", subtype, writer.Boundary()),
+		body:        buffer.Bytes(),
+	}
+}
+
+func formatSender(name, address string) string {
+	if name == "" {
+		return address
+	}
+	return encodeHeader(name) + " <" + address + ">"
+}
+
+func encodeHeader(value string) string {
+	return mime.QEncoding.Encode("UTF-8", value)
+}
+
+func encodeBase64(data []byte) []byte {
+	encoded := base64.StdEncoding.EncodeToString(data)
+	var wrapped strings.Builder
+	for len(encoded) > 76 {
+		wrapped.WriteString(encoded[:76] + "\r\n")
+		encoded = encoded[76:]
+	}
+	wrapped.WriteString(encoded)
+	return []byte(wrapped.String())
+}
