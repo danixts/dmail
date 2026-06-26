@@ -55,14 +55,21 @@ invoice := dmail.MustTemplate(dmail.TemplateConfig{
 	HTML:    "<h2>Hi {{.Name}}</h2><p>Total: {{.Total}}</p>",
 })
 
+type Invoice struct {
+	Name   string
+	Number string
+	Total  string
+}
+
 client.Send(dmail.Email{
 	To:       []string{"client@example.com"},
 	Template: invoice,
-	Data:     map[string]any{"Name": "Ariel", "Number": "F-001", "Total": "100 USD"},
+	Data:     Invoice{Name: "Ariel", Number: "F-001", Total: "100 USD"},
 })
 ```
 
-`Data` can be a map or a struct. Need a preview? `invoice.Render(data)`.
+`Data` is any value — a struct (type-safe, recommended) or a `map[string]any`.
+Need a preview? `invoice.Render(data)`.
 
 ## Attachments, CC, BCC, Reply-To
 
