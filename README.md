@@ -5,9 +5,19 @@ Send email over **any SMTP provider** from Go. Zero dependencies.
 Works with Amazon SES, SendGrid, Mailgun, Gmail, Microsoft 365, Azure — just
 change the host and credentials.
 
+## Install
+
 ```bash
-go get github.com/danixts/dmail
+go get github.com/danixts/dmail@latest
 ```
+
+Then import it:
+
+```go
+import "github.com/danixts/dmail"
+```
+
+Requires Go 1.26+.
 
 ## Quick start
 
@@ -131,7 +141,6 @@ make check   # fmt + vet + lint + build + tests (80% coverage gate)
 ```
 
 Tests live in `tests/` (black-box, with an in-memory fake SMTP server).
-Requires Go 1.26+.
 
 ## License
 
