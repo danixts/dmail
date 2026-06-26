@@ -142,6 +142,90 @@ Attachments: []dmail.Attachment{
 }
 ```
 
+## HTML templates with variables
+
+dmail can render the subject, HTML and text from Go templates, so you don't have
+to do string replacement by hand. Compile a template once and reuse it for every
+email — ideal for transactional mail (invoices, OTPs, receipts).
+
+The HTML is rendered with `html/template`, which **auto-escapes** values to
+prevent HTML/script injection.
+
+```go
+invoice := dmail.MustTemplate(dmail.TemplateConfig{
+	Subject: "Invoice {{.Number}} for {{.Name}}",
+	HTML: `<h2>Hello {{.Name}} 👋</h2>
+<p>Your invoice <b>{{.Number}}</b> is ready.</p>
+<p>Total: <b>{{.Total}}</b></p>`,
+	Text: "Hello {{.Name}}, invoice {{.Number}} total {{.Total}}.",
+})
+
+err := client.Send(dmail.Email{
+	To:       []string{"client@example.com"},
+	Template: invoice,
+	Data: map[string]any{
+		"Name":   "Ariel",
+		"Number": "F-2026-001",
+		"Total":  "100 USD",
+	},
+})
+```
+
+When `Email.Template` is set, dmail renders `Subject`, `HTML` and `Text` from it
+using `Email.Data`, so you don't set those fields yourself.
+
+### Data: map or struct
+
+`Data` can be a `map[string]any` or any struct — fields are referenced with
+`{{.FieldName}}`:
+
+```go
+type InvoiceData struct {
+	Name   string
+	Number string
+	Total  string
+}
+
+client.Send(dmail.Email{
+	To:       []string{"client@example.com"},
+	Template: invoice,
+	Data:     InvoiceData{Name: "Ariel", Number: "F-2026-001", Total: "100 USD"},
+})
+```
+
+### Validation and errors
+
+- `NewTemplate` returns an error if a template fails to parse — check it once at
+  startup.
+- `MustTemplate` panics on a parse error — handy for package-level templates
+  defined at init time.
+- A render error (for example, a missing field with strict settings) is returned
+  by `Send`.
+
+### Loading templates from files
+
+Keep templates in `.html` files and load them with `os.ReadFile`:
+
+```go
+htmlBytes, err := os.ReadFile("templates/invoice.html")
+if err != nil {
+	// handle error
+}
+invoice := dmail.MustTemplate(dmail.TemplateConfig{
+	Subject: "Invoice {{.Number}}",
+	HTML:    string(htmlBytes),
+})
+```
+
+### Rendering without sending
+
+You can render a template directly (for previews or tests):
+
+```go
+rendered, err := invoice.Render(map[string]any{"Name": "Ariel", "Number": "F-1", "Total": "100"})
+// rendered.Subject, rendered.HTML, rendered.Text
+```
+
 ## Logging
 
 The client logs send attempts, successes and failures with `log/slog`. By
@@ -188,8 +272,12 @@ client, _ := dmail.New(cfg, dmail.WithTransport(fake))
 | `WithTransport(Transport) Option` | Inject a custom transport |
 | `(*Client).Send(Email) error` | Send an email |
 | `AttachFile(path) (Attachment, error)` | Read a file and detect its MIME type |
+| `NewTemplate(TemplateConfig) (*Template, error)` | Compile a reusable subject/HTML/text template |
+| `MustTemplate(TemplateConfig) *Template` | Like `NewTemplate` but panics on parse error |
+| `(*Template).Render(data) (RenderedTemplate, error)` | Render without sending |
 | `Config` | Host, Port, Username, Password, From, FromName, TLSConfig (optional) |
-| `Email` | To, Cc, Bcc, ReplyTo, Subject, Text, HTML, Attachments |
+| `TemplateConfig` | Subject, HTML, Text (Go template sources) |
+| `Email` | To, Cc, Bcc, ReplyTo, Subject, Text, HTML, Attachments, Template, Data |
 | `Attachment` | Filename, Content (`[]byte`), ContentType (optional) |
 | `Transport` | `Deliver(Envelope) error` — the delivery port |
 
