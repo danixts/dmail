@@ -35,7 +35,7 @@ func New(config Config, options ...Option) (*Client, error) {
 
 	client := &Client{
 		config: config,
-		sender: formatSender(config.SenderName, config.SenderAddr),
+		sender: formatSender(config.FromName, config.From),
 		logger: slog.Default(),
 	}
 	for _, option := range options {
@@ -52,6 +52,11 @@ func NewFromEnv(options ...Option) (*Client, error) {
 }
 
 func (c *Client) Send(email Email) error {
+	if err := email.applyTemplate(); err != nil {
+		c.logger.Error("dmail: template render failed", slog.String("error", err.Error()))
+		return err
+	}
+
 	log := c.logger.With(
 		slog.Any("to", email.To),
 		slog.Any("cc", email.Cc),
@@ -64,7 +69,7 @@ func (c *Client) Send(email Email) error {
 	}
 
 	envelope := Envelope{
-		From:       c.config.SenderAddr,
+		From:       c.config.From,
 		Recipients: email.recipients(),
 		Message:    renderMessage(c.sender, email),
 	}

@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
+	"strings"
 )
 
 type Envelope struct {
@@ -25,16 +26,18 @@ func newSMTPTransport(config Config) smtpTransport {
 }
 
 func (t smtpTransport) Deliver(envelope Envelope) error {
-	client, err := smtp.Dial(t.config.address())
+	client, err := t.dial()
 	if err != nil {
-		return fmt.Errorf("dmail: dial: %w", err)
+		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
-	if err := client.StartTLS(&tls.Config{ServerName: t.config.Host}); err != nil {
-		return fmt.Errorf("dmail: starttls: %w", err)
+	if !t.config.usesImplicitTLS() {
+		if err := client.StartTLS(t.tlsConfig()); err != nil {
+			return fmt.Errorf("dmail: starttls: %w", err)
+		}
 	}
-	if err := client.Auth(newLoginAuth(t.config.User, t.config.Pass)); err != nil {
+	if err := client.Auth(t.auth(client)); err != nil {
 		return fmt.Errorf("dmail: auth: %w", err)
 	}
 	if err := client.Mail(envelope.From); err != nil {
@@ -57,4 +60,38 @@ func (t smtpTransport) Deliver(envelope Envelope) error {
 		return fmt.Errorf("dmail: close: %w", err)
 	}
 	return client.Quit()
+}
+
+func (t smtpTransport) dial() (*smtp.Client, error) {
+	if !t.config.usesImplicitTLS() {
+		client, err := smtp.Dial(t.config.address())
+		if err != nil {
+			return nil, fmt.Errorf("dmail: dial: %w", err)
+		}
+		return client, nil
+	}
+
+	conn, err := tls.Dial("tcp", t.config.address(), t.tlsConfig())
+	if err != nil {
+		return nil, fmt.Errorf("dmail: tls dial: %w", err)
+	}
+	client, err := smtp.NewClient(conn, t.config.Host)
+	if err != nil {
+		return nil, fmt.Errorf("dmail: smtp client: %w", err)
+	}
+	return client, nil
+}
+
+func (t smtpTransport) tlsConfig() *tls.Config {
+	if t.config.TLSConfig != nil {
+		return t.config.TLSConfig
+	}
+	return &tls.Config{ServerName: t.config.Host}
+}
+
+func (t smtpTransport) auth(client *smtp.Client) smtp.Auth {
+	if ok, mechanisms := client.Extension("AUTH"); ok && strings.Contains(mechanisms, "PLAIN") {
+		return smtp.PlainAuth("", t.config.Username, t.config.Password, t.config.Host)
+	}
+	return newLoginAuth(t.config.Username, t.config.Password)
 }

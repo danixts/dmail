@@ -18,6 +18,28 @@ type Email struct {
 	Text        string
 	HTML        string
 	Attachments []Attachment
+	Template    *Template
+	Data        any
+}
+
+func (e *Email) applyTemplate() error {
+	if e.Template == nil {
+		return nil
+	}
+	rendered, err := e.Template.Render(e.Data)
+	if err != nil {
+		return err
+	}
+	if rendered.Subject != "" {
+		e.Subject = rendered.Subject
+	}
+	if rendered.HTML != "" {
+		e.HTML = rendered.HTML
+	}
+	if rendered.Text != "" {
+		e.Text = rendered.Text
+	}
+	return nil
 }
 
 type Attachment struct {

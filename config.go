@@ -1,39 +1,35 @@
 package dmail
 
 import (
+	"crypto/tls"
 	"errors"
 	"os"
 )
 
-const (
-	defaultHost = "smtp.azurecomm.net"
-	defaultPort = "587"
-)
+const defaultPort = "587"
 
 type Config struct {
-	Host       string
-	Port       string
-	User       string
-	Pass       string
-	SenderAddr string
-	SenderName string
+	Host      string
+	Port      string
+	Username  string
+	Password  string
+	From      string
+	FromName  string
+	TLSConfig *tls.Config
 }
 
 func ConfigFromEnv() Config {
 	return Config{
-		Host:       os.Getenv("ACS_SMTP_HOST"),
-		Port:       os.Getenv("ACS_SMTP_PORT"),
-		User:       os.Getenv("ACS_SMTP_USER"),
-		Pass:       os.Getenv("ACS_SMTP_PASS"),
-		SenderAddr: os.Getenv("ACS_SENDER"),
-		SenderName: os.Getenv("ACS_SENDER_NAME"),
+		Host:     os.Getenv("SMTP_HOST"),
+		Port:     os.Getenv("SMTP_PORT"),
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+		FromName: os.Getenv("SMTP_FROM_NAME"),
 	}
 }
 
 func (c Config) withDefaults() Config {
-	if c.Host == "" {
-		c.Host = defaultHost
-	}
 	if c.Port == "" {
 		c.Port = defaultPort
 	}
@@ -41,15 +37,22 @@ func (c Config) withDefaults() Config {
 }
 
 func (c Config) validate() error {
-	if c.User == "" || c.Pass == "" {
-		return errors.New("dmail: User and Pass are required")
+	if c.Host == "" {
+		return errors.New("dmail: Host is required")
 	}
-	if c.SenderAddr == "" {
-		return errors.New("dmail: SenderAddr is required")
+	if c.Username == "" || c.Password == "" {
+		return errors.New("dmail: Username and Password are required")
+	}
+	if c.From == "" {
+		return errors.New("dmail: From is required")
 	}
 	return nil
 }
 
 func (c Config) address() string {
 	return c.Host + ":" + c.Port
+}
+
+func (c Config) usesImplicitTLS() bool {
+	return c.Port == "465"
 }

@@ -12,19 +12,23 @@ import (
 )
 
 type mimeEntity struct {
-	contentType string
-	body        []byte
+	header textproto.MIMEHeader
+	body   []byte
 }
 
 func renderMessage(sender string, email Email) []byte {
-	headers := messageHeaders(sender, email)
 	content := buildContent(email)
 
 	var message bytes.Buffer
-	for _, header := range headers {
+	for _, header := range messageHeaders(sender, email) {
 		message.WriteString(header + "\r\n")
 	}
-	message.WriteString("Content-Type: " + content.contentType + "\r\n\r\n")
+	for _, name := range []string{"Content-Type", "Content-Transfer-Encoding"} {
+		if value := content.header.Get(name); value != "" {
+			message.WriteString(name + ": " + value + "\r\n")
+		}
+	}
+	message.WriteString("\r\n")
 	message.Write(content.body)
 	return message.Bytes()
 }
@@ -74,33 +78,35 @@ func buildBody(email Email) mimeEntity {
 }
 
 func buildText(mediaType, body string) mimeEntity {
-	return mimeEntity{
-		contentType: mediaType + `; charset="UTF-8"`,
-		body:        []byte(body),
-	}
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Type", mediaType+`; charset="UTF-8"`)
+	header.Set("Content-Transfer-Encoding", "8bit")
+	return mimeEntity{header: header, body: []byte(body)}
 }
 
 func buildAttachment(attachment Attachment) mimeEntity {
-	return mimeEntity{
-		contentType: fmt.Sprintf("%s; name=%q", attachment.resolvedContentType(), attachment.Filename),
-		body:        encodeBase64(attachment.Content),
-	}
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Type", fmt.Sprintf("%s; name=%q", attachment.resolvedContentType(), attachment.Filename))
+	header.Set("Content-Transfer-Encoding", "base64")
+	header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.Filename))
+	return mimeEntity{header: header, body: encodeBase64(attachment.Content)}
 }
 
 func combineParts(subtype string, parts []mimeEntity) mimeEntity {
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 	for _, part := range parts {
-		header := textproto.MIMEHeader{"Content-Type": {part.contentType}}
-		if partWriter, err := writer.CreatePart(header); err == nil {
-			partWriter.Write(part.body)
+		partWriter, err := writer.CreatePart(part.header)
+		if err != nil {
+			continue
 		}
+		_, _ = partWriter.Write(part.body)
 	}
-	writer.Close()
-	return mimeEntity{
-		contentType: fmt.Sprintf("multipart/%s; boundary=%q", subtype, writer.Boundary()),
-		body:        buffer.Bytes(),
-	}
+	_ = writer.Close()
+
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Type", fmt.Sprintf("multipart/%s; boundary=%q", subtype, writer.Boundary()))
+	return mimeEntity{header: header, body: buffer.Bytes()}
 }
 
 func formatSender(name, address string) string {

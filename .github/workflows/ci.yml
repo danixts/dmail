@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test with coverage gate (80%)
+        run: |
+          go test -race -coverpkg=./... -coverprofile=coverage.out ./...
+          total=$(go tool cover -func=coverage.out | awk '/total:/ {print $3}' | tr -d '%')
+          echo "Total coverage: $total%"
+          awk "BEGIN{exit !($total >= 80)}" || { echo "Coverage $total% is below 80%"; exit 1; }
