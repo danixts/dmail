@@ -2,6 +2,7 @@ package dmail_test
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -162,7 +163,7 @@ func TestDeliverWithLoginAuth(t *testing.T) {
 	addr := startFakeSMTP(t, cert, "AUTH LOGIN", &captured)
 
 	client := clientForServer(t, addr, pool)
-	if err := client.Send(dmail.Email{To: []string{"to@example.com"}, Subject: "Hi", Text: "Body"}); err != nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"to@example.com"}, Subject: "Hi", Text: "Body"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !strings.Contains(captured, "Subject: Hi") {
@@ -176,7 +177,7 @@ func TestDeliverWithPlainAuth(t *testing.T) {
 	addr := startFakeSMTP(t, cert, "AUTH LOGIN PLAIN", &captured)
 
 	client := clientForServer(t, addr, pool)
-	if err := client.Send(dmail.Email{To: []string{"to@example.com"}, Subject: "Hi", HTML: "<b>Hi</b>"}); err != nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"to@example.com"}, Subject: "Hi", HTML: "<b>Hi</b>"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !strings.Contains(captured, "text/html") {
@@ -195,7 +196,7 @@ func TestDeliverDialError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if err := client.Send(dmail.Email{To: []string{"a@example.com"}, Text: "x"}); err == nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"a@example.com"}, Text: "x"}); err == nil {
 		t.Error("expected dial error")
 	}
 }

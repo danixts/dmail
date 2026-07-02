@@ -1,6 +1,7 @@
 package dmail_test
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
@@ -14,7 +15,7 @@ func ExampleClient_Send() {
 		return
 	}
 
-	_ = client.Send(dmail.Email{
+	_ = client.Send(context.Background(), dmail.Email{
 		To:      []string{"someone@example.com"},
 		Subject: "Hello",
 		HTML:    "<h1>Hi</h1>",
@@ -40,7 +41,7 @@ func ExampleClient_Send_template() {
 		Total  string
 	}
 
-	_ = client.Send(dmail.Email{
+	_ = client.Send(context.Background(), dmail.Email{
 		To:       []string{"client@example.com"},
 		Template: invoice,
 		Data:     Invoice{Name: "Ariel", Number: "F-001", Total: "100 USD"},
@@ -58,7 +59,7 @@ func ExampleAttachFile() {
 		return
 	}
 
-	_ = client.Send(dmail.Email{
+	_ = client.Send(context.Background(), dmail.Email{
 		To:          []string{"client@example.com"},
 		Subject:     "Your invoice",
 		HTML:        "<p>Attached.</p>",

@@ -24,7 +24,7 @@ Requires Go 1.26+.
 ```go
 client, _ := dmail.NewFromEnv()
 
-client.Send(dmail.Email{
+client.Send(context.Background(), dmail.Email{
 	To:      []string{"someone@example.com"},
 	Subject: "Hello",
 	HTML:    "<h1>Hi 👋</h1>",
@@ -71,7 +71,7 @@ type Invoice struct {
 	Total  string
 }
 
-client.Send(dmail.Email{
+client.Send(context.Background(), dmail.Email{
 	To:       []string{"client@example.com"},
 	Template: invoice,
 	Data:     Invoice{Name: "Ariel", Number: "F-001", Total: "100 USD"},
@@ -86,7 +86,7 @@ Need a preview? `invoice.Render(data)`.
 ```go
 file, _ := dmail.AttachFile("invoice.pdf") // MIME type auto-detected
 
-client.Send(dmail.Email{
+client.Send(context.Background(), dmail.Email{
 	To:          []string{"client@example.com"},
 	Cc:          []string{"billing@yourdomain.com"},
 	Bcc:         []string{"audit@yourdomain.com"},
@@ -129,7 +129,7 @@ Auth negotiates `PLAIN` / `LOGIN` based on what the server offers.
 | | |
 |--|--|
 | `New(Config, ...Option)` / `NewFromEnv(...Option)` | create a client |
-| `client.Send(Email)` | send an email |
+| `client.Send(context.Context, Email)` | send an email |
 | `WithLogger(*slog.Logger)` / `WithTransport(Transport)` | options |
 | `AttachFile(path)` | read a file as an attachment |
 | `NewTemplate` / `MustTemplate` / `template.Render` | HTML templates |

@@ -1,6 +1,7 @@
 package dmail_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ type captureTransport struct {
 	envelope dmail.Envelope
 }
 
-func (c *captureTransport) Deliver(envelope dmail.Envelope) error {
+func (c *captureTransport) Deliver(_ context.Context, envelope dmail.Envelope) error {
 	c.envelope = envelope
 	return nil
 }
@@ -37,7 +38,7 @@ func TestSendBuildsEnvelope(t *testing.T) {
 	capture := &captureTransport{}
 	client := newClient(t, capture)
 
-	err := client.Send(dmail.Email{
+	err := client.Send(context.Background(), dmail.Email{
 		To:      []string{"a@example.com"},
 		Cc:      []string{"b@example.com"},
 		ReplyTo: "reply@example.com",
@@ -77,7 +78,7 @@ func TestSendWithAttachment(t *testing.T) {
 	capture := &captureTransport{}
 	client := newClient(t, capture)
 
-	err := client.Send(dmail.Email{
+	err := client.Send(context.Background(), dmail.Email{
 		To:      []string{"a@example.com"},
 		Subject: "Files",
 		Text:    "see attachment",
@@ -107,7 +108,7 @@ func TestSendSingleBody(t *testing.T) {
 	capture := &captureTransport{}
 	client := newClient(t, capture)
 
-	if err := client.Send(dmail.Email{To: []string{"a@x"}, Subject: "h", HTML: "<i>x</i>"}); err != nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"a@x"}, Subject: "h", HTML: "<i>x</i>"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	message := string(capture.envelope.Message)
@@ -119,10 +120,10 @@ func TestSendSingleBody(t *testing.T) {
 func TestSendValidatesEmail(t *testing.T) {
 	client := newClient(t, &captureTransport{})
 
-	if err := client.Send(dmail.Email{Subject: "x", Text: "x"}); err == nil {
+	if err := client.Send(context.Background(), dmail.Email{Subject: "x", Text: "x"}); err == nil {
 		t.Error("expected error when To is empty")
 	}
-	if err := client.Send(dmail.Email{To: []string{"a@example.com"}}); err == nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"a@example.com"}}); err == nil {
 		t.Error("expected error when Text and HTML are empty")
 	}
 }
@@ -153,7 +154,7 @@ func TestNewFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFromEnv: %v", err)
 	}
-	if err := client.Send(dmail.Email{To: []string{"a@x"}, Subject: "s", Text: "t"}); err != nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"a@x"}, Subject: "s", Text: "t"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !strings.Contains(string(capture.envelope.Message), "From: From <from@test>") {
@@ -172,7 +173,7 @@ func TestSenderWithoutName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if err := client.Send(dmail.Email{To: []string{"a@x"}, Subject: "s", Text: "t"}); err != nil {
+	if err := client.Send(context.Background(), dmail.Email{To: []string{"a@x"}, Subject: "s", Text: "t"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !strings.Contains(string(capture.envelope.Message), "From: plain@example.com") {
@@ -217,7 +218,7 @@ func TestTemplateRendering(t *testing.T) {
 
 	capture := &captureTransport{}
 	client := newClient(t, capture)
-	err = client.Send(dmail.Email{
+	err = client.Send(context.Background(), dmail.Email{
 		To:       []string{"client@example.com"},
 		Template: tmpl,
 		Data:     invoiceData{Name: "Ariel", Number: "F-001"},
@@ -255,7 +256,7 @@ func TestHeaderInjectionStripped(t *testing.T) {
 	capture := &captureTransport{}
 	client := newClient(t, capture)
 
-	err := client.Send(dmail.Email{
+	err := client.Send(context.Background(), dmail.Email{
 		To:      []string{"a@example.com\r\nBcc: victim@example.com"},
 		Subject: "Hello\r\nX-Injected: yes",
 		Text:    "body",

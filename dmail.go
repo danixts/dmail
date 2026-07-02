@@ -1,6 +1,9 @@
 package dmail
 
-import "log/slog"
+import (
+	"context"
+	"log/slog"
+)
 
 // Client sends [Email] messages over SMTP.
 type Client struct {
@@ -59,7 +62,9 @@ func NewFromEnv(options ...Option) (*Client, error) {
 	return New(ConfigFromEnv(), options...)
 }
 
-func (c *Client) Send(email Email) error {
+// Send renders email (applying its [Template] if set) and delivers it
+// through the client's [Transport]. It stops as soon as ctx is done.
+func (c *Client) Send(ctx context.Context, email Email) error {
 	if err := email.applyTemplate(); err != nil {
 		c.logger.Error("dmail: template render failed", slog.String("error", err.Error()))
 		return err
@@ -83,7 +88,7 @@ func (c *Client) Send(email Email) error {
 	}
 
 	log.Info("dmail: sending email", slog.Int("recipients", len(envelope.Recipients)))
-	if err := c.transport.Deliver(envelope); err != nil {
+	if err := c.transport.Deliver(ctx, envelope); err != nil {
 		log.Error("dmail: delivery failed", slog.String("error", err.Error()))
 		return err
 	}
