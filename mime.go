@@ -98,7 +98,7 @@ func buildText(mediaType, body string) mimeEntity {
 
 func buildAttachment(attachment Attachment) mimeEntity {
 	header := textproto.MIMEHeader{}
-	header.Set("Content-Type", fmt.Sprintf("%s; name=%q", attachment.resolvedContentType(), attachment.Filename))
+	header.Set("Content-Type", fmt.Sprintf("%s; name=%q", sanitizeHeader(attachment.resolvedContentType()), attachment.Filename))
 	header.Set("Content-Transfer-Encoding", "base64")
 	header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.Filename))
 	return mimeEntity{header: header, body: encodeBase64(attachment.Content)}

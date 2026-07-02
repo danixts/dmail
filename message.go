@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// Errors returned by [Email.validate] when a required field is missing.
+var (
+	ErrNoRecipients = errors.New("dmail: at least one recipient is required in To")
+	ErrEmptyBody    = errors.New("dmail: email requires Text or HTML")
+)
+
+// Email describes a single message to send, including its recipients,
+// content, optional attachments and optional [Template].
 type Email struct {
 	To          []string
 	Cc          []string
@@ -42,12 +50,15 @@ func (e *Email) applyTemplate() error {
 	return nil
 }
 
+// Attachment is a file attached to an [Email]. ContentType is detected from
+// Filename's extension when left empty.
 type Attachment struct {
 	Filename    string
 	Content     []byte
 	ContentType string
 }
 
+// AttachFile reads the file at path and returns it as an [Attachment].
 func AttachFile(path string) (Attachment, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -76,10 +87,10 @@ func (e Email) recipients() []string {
 
 func (e Email) validate() error {
 	if len(e.To) == 0 {
-		return errors.New("dmail: at least one recipient is required in To")
+		return ErrNoRecipients
 	}
 	if strings.TrimSpace(e.Text) == "" && strings.TrimSpace(e.HTML) == "" {
-		return errors.New("dmail: email requires Text or HTML")
+		return ErrEmptyBody
 	}
 	return nil
 }

@@ -12,6 +12,14 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
+// Errors returned by [Config.validate] when a required field is missing.
+var (
+	ErrMissingHost        = errors.New("dmail: Host is required")
+	ErrMissingCredentials = errors.New("dmail: Username and Password are required")
+	ErrMissingFrom        = errors.New("dmail: From is required")
+)
+
+// Config holds the SMTP connection settings and sender identity used by [Client].
 type Config struct {
 	Host      string
 	Port      string
@@ -23,6 +31,8 @@ type Config struct {
 	TLSConfig *tls.Config
 }
 
+// ConfigFromEnv builds a Config from the SMTP_HOST, SMTP_PORT, SMTP_USERNAME,
+// SMTP_PASSWORD, SMTP_FROM and SMTP_FROM_NAME environment variables.
 func ConfigFromEnv() Config {
 	return Config{
 		Host:     os.Getenv("SMTP_HOST"),
@@ -46,13 +56,13 @@ func (c Config) withDefaults() Config {
 
 func (c Config) validate() error {
 	if c.Host == "" {
-		return errors.New("dmail: Host is required")
+		return ErrMissingHost
 	}
 	if c.Username == "" || c.Password == "" {
-		return errors.New("dmail: Username and Password are required")
+		return ErrMissingCredentials
 	}
 	if c.From == "" {
-		return errors.New("dmail: From is required")
+		return ErrMissingFrom
 	}
 	return nil
 }
@@ -61,6 +71,6 @@ func (c Config) address() string {
 	return c.Host + ":" + c.Port
 }
 
-func (c Config) usesImplicitTLS() bool {
+func (c Config) isImplicitTLS() bool {
 	return c.Port == "465"
 }

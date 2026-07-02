@@ -33,7 +33,7 @@ func (t smtpTransport) Deliver(envelope Envelope) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	if !t.config.usesImplicitTLS() {
+	if !t.config.isImplicitTLS() {
 		if err := client.StartTLS(t.tlsConfig()); err != nil {
 			return fmt.Errorf("dmail: starttls: %w", err)
 		}
@@ -66,7 +66,7 @@ func (t smtpTransport) Deliver(envelope Envelope) error {
 func (t smtpTransport) dial() (*smtp.Client, error) {
 	dialer := &net.Dialer{Timeout: t.config.Timeout}
 
-	if t.config.usesImplicitTLS() {
+	if t.config.isImplicitTLS() {
 		conn, err := tls.DialWithDialer(dialer, "tcp", t.config.address(), t.tlsConfig())
 		if err != nil {
 			return nil, fmt.Errorf("dmail: tls dial: %w", err)

@@ -2,6 +2,7 @@ package dmail
 
 import "log/slog"
 
+// Client sends [Email] messages over SMTP.
 type Client struct {
 	config    Config
 	sender    string
@@ -9,8 +10,10 @@ type Client struct {
 	logger    *slog.Logger
 }
 
+// Option configures a [Client] created by [New] or [NewFromEnv].
 type Option func(*Client)
 
+// WithLogger sets the logger used by the [Client]. A nil logger is ignored.
 func WithLogger(logger *slog.Logger) Option {
 	return func(c *Client) {
 		if logger != nil {
@@ -19,6 +22,8 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithTransport overrides the [Transport] used to deliver messages, mainly
+// for testing. A nil transport is ignored.
 func WithTransport(transport Transport) Option {
 	return func(c *Client) {
 		if transport != nil {
@@ -27,6 +32,8 @@ func WithTransport(transport Transport) Option {
 	}
 }
 
+// New creates a [Client] from config, applying any options. It returns an
+// error if config fails validation.
 func New(config Config, options ...Option) (*Client, error) {
 	config = config.withDefaults()
 	if err := config.validate(); err != nil {
@@ -47,6 +54,7 @@ func New(config Config, options ...Option) (*Client, error) {
 	return client, nil
 }
 
+// NewFromEnv creates a [Client] using [ConfigFromEnv].
 func NewFromEnv(options ...Option) (*Client, error) {
 	return New(ConfigFromEnv(), options...)
 }

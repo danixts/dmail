@@ -7,18 +7,24 @@ import (
 	texttemplate "text/template"
 )
 
+// TemplateConfig holds the text/template sources for a [Template]. Each
+// field is optional; empty ones are left unrendered.
 type TemplateConfig struct {
 	Subject string
 	HTML    string
 	Text    string
 }
 
+// Template renders an [Email]'s subject, HTML body and text body from
+// parsed templates. HTML is rendered with html/template for auto-escaping;
+// Subject and Text use text/template.
 type Template struct {
 	subject *texttemplate.Template
 	html    *htmltemplate.Template
 	text    *texttemplate.Template
 }
 
+// NewTemplate parses config into a [Template].
 func NewTemplate(config TemplateConfig) (*Template, error) {
 	template := &Template{}
 
@@ -46,6 +52,7 @@ func NewTemplate(config TemplateConfig) (*Template, error) {
 	return template, nil
 }
 
+// MustTemplate is like [NewTemplate] but panics if config fails to parse.
 func MustTemplate(config TemplateConfig) *Template {
 	template, err := NewTemplate(config)
 	if err != nil {
@@ -54,12 +61,16 @@ func MustTemplate(config TemplateConfig) *Template {
 	return template
 }
 
+// RenderedTemplate holds the output of [Template.Render]. Fields left
+// unset in the source [TemplateConfig] are returned empty.
 type RenderedTemplate struct {
 	Subject string
 	HTML    string
 	Text    string
 }
 
+// Render executes the template against data, returning the rendered
+// subject, HTML and text.
 func (t *Template) Render(data any) (RenderedTemplate, error) {
 	var rendered RenderedTemplate
 
